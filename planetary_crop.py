@@ -1,3 +1,6 @@
+# pip install matplotlib astropy
+# python planetary_crop.py
+
 import os
 import matplotlib.pyplot as plt
 from astropy.visualization import astropy_mpl_style
@@ -9,16 +12,17 @@ from astropy.io import fits
 import numpy as np
 from PIL import Image
 
-input_dir = 'in'
-output_dir = 'out'
-interactive = False
-normalize_channels = False
-min_avg_color = 0.6
-min_color_stable = False
+input_dir = 'in' # put fits here
+output_dir = 'out' # get generated images here 
+interactive = False # show interface
+normalize_channels = False # same max value for color channels
+min_avg_color = 0.6 # target covers at least 60% of final images
+min_color_stable = False # keep same min_color between images
 min_color_init = 10
 min_color_step = 5
-min_color_calculated = False
-padding = 10
+padding = 10 # padding arround target
+
+min_color_calculated = False 
 
 color_channel_values = range(255);
 
@@ -33,14 +37,13 @@ for filename in os.listdir(input_dir):
 
 		min_color = min_color if min_color_calculated and min_color_stable else min_color_init
 
-		# filtering dark pixels
+		# find planetary object and crop
 		while True:
 			image_rgb = image_data
 			image_rgb = np.sum(image_rgb, axis=2)
+
 			image_rgb[image_rgb < min_color] = 0
 			image_rgb[image_rgb >= min_color] = 1
-
-			# croping image
 			visible = image_rgb.nonzero();
 
 			xmin0 = visible[0].min()
