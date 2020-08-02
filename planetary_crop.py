@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 from astropy.visualization import astropy_mpl_style
 plt.style.use(astropy_mpl_style)
 
-from astropy.utils.data import get_pkg_data_filename
-from astropy.io import fits
 
 import numpy as np
 from PIL import Image
@@ -29,16 +27,24 @@ previous_img = None
 previous_filename = None
 
 for filename in os.listdir(input_dir):
-	if filename.endswith(".fit") or filename.endswith(".fits"):
-		extension = 'fit' if filename.endswith(".fit") else 'fits'
+	image_data = None
+	_,extension = os.path.splitext(filename)
 
+	if filename.endswith(".fit") or filename.endswith(".fits"):
+		from astropy.utils.data import get_pkg_data_filename
+		from astropy.io import fits
 		image_file = get_pkg_data_filename(input_dir + '\\' + filename)
 		fits.info(image_file)
 		image_data = fits.getdata(image_file, ext=0)
 		image_data = image_data.transpose((1,2,0))
 		image_data = np.flip(image_data, axis=0)
 		t = image_data.dtype
+	else:
+		image_data = np.asarray(Image.open(input_dir + '\\' + filename))
+		print(filename)
+		print(image_data.shape)
 
+	if image_data is not None:
 		if interactive:
 			fig,splt = plt.subplots(4 if generate_differential_img else 2)
 
@@ -101,7 +107,7 @@ for filename in os.listdir(input_dir):
 			splt[3].set_visible(generate_differential_img and previous_img is not None)
 		
 		pil_img = Image.fromarray(image_data)
-		file_path = output_dir + '\\' + filename.replace('.'+extension, '') + '.png'
+		file_path = output_dir + '\\' + filename.replace(extension, '.png')
 		pil_img.save(file_path)
 		print(file_path)
 
@@ -139,7 +145,7 @@ for filename in os.listdir(input_dir):
 
 			# writing diff image
 			pil_img = Image.fromarray(diff_img)
-			diff_file_path = output_dir + '\\' + previous_filename.replace('.'+extension, '') + '_TO_' + filename.replace('.'+extension, '') + '.png'
+			diff_file_path = output_dir + '\\' + previous_filename.replace(extension, '') + '_TO_' + filename.replace(extension, '.png')
 			pil_img.save(diff_file_path)
 			print(diff_file_path)
 
