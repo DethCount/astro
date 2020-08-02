@@ -21,10 +21,12 @@ min_color_stable = False # keep same min_color between images
 min_color_init = 10
 min_color_step = 5
 padding = 10 # padding arround target
+generate_differential_img = True
 
 min_color_calculated = False 
-
 color_channel_values = range(255);
+previous_img = None
+previous_filename = None
 
 for filename in os.listdir(input_dir):
 	if filename.endswith(".fit") or filename.endswith(".fits"):
@@ -34,6 +36,9 @@ for filename in os.listdir(input_dir):
 		fits.info(image_file)
 		image_data = fits.getdata(image_file, ext=0)
 		image_data = image_data.transpose((1,2,0))
+		image_data = np.flip(image_data, axis=0)
+		t = image_data.dtype
+		fig,splt = plt.subplots(4 if generate_differential_img else 2)
 
 		min_color = min_color if min_color_calculated and min_color_stable else min_color_init
 
@@ -68,7 +73,6 @@ for filename in os.listdir(input_dir):
 
 		# normalising rgb channels
 		if normalize_channels:
-			t = image_data.dtype
 			maxes = np.array([
 				image_data[:,:,0].max(),
 				image_data[:,:,1].max(),
@@ -84,18 +88,69 @@ for filename in os.listdir(input_dir):
 
 		if interactive:
 			# histogramme
-			plt.hist(image_data[:,:,0].flatten(), bins=color_channel_values, color='r')
-			plt.hist(image_data[:,:,1].flatten(), bins=color_channel_values, color='g')
-			plt.hist(image_data[:,:,2].flatten(), bins=color_channel_values, color='b')
-			plt.show(block = False)
-
+			splt[0].hist(image_data[:,:,0].flatten(), bins=color_channel_values, color='r')
+			splt[0].hist(image_data[:,:,1].flatten(), bins=color_channel_values, color='g')
+			splt[0].hist(image_data[:,:,2].flatten(), bins=color_channel_values, color='b')
+			
 			# image finale
-			plt.figure()
-			plt.imshow(image_data)
-			plt.colorbar()
-			plt.show()
+			splt[1].imshow(image_data)
 
-		image_data = np.flip(image_data, axis=0)
+			splt[2].set_visible(generate_differential_img and previous_img is not None)
+			splt[3].set_visible(generate_differential_img and previous_img is not None)
+		
 		pil_img = Image.fromarray(image_data)
-		pil_img.save(output_dir + '\\' + filename.replace('.'+extension, '') + '.png')
-		print(output_dir + '\\' + filename.replace('.'+extension, '') + '.png')
+		file_path = output_dir + '\\' + filename.replace('.'+extension, '') + '.png'
+		pil_img.save(file_path)
+		print(file_path)
+
+		if generate_differential_img and previous_img is not None:
+			xmaxshape = max(image_data.shape[0], previous_img.shape[0])
+			ymaxshape = max(image_data.shape[1], previous_img.shape[1])
+			maxshape = (xmaxshape,ymaxshape,3)
+			print(maxshape)
+			image_data_tmp = np.zeros(shape = maxshape)
+			image_data[:image_data.shape[0],:image_data.shape[1],:] = image_data
+			previous_img_tmp = np.zeros(shape = maxshape)
+			previous_img_tmp[:previous_img.shape[0],:previous_img.shape[1],:] = previous_img
+			previous_img = previous_img_tmp
+			del previous_img_tmp
+
+			diff_img = image_data_tmp - previous_img
+			tmp_diff_img = np.sum(diff_img, axis=2)
+			diff_img = np.zeros(shape = maxshape)
+
+			print(maxshape)
+			print(diff_img.shape)
+
+			for x in range(xmaxshape):
+				for y in range(ymaxshape):
+					val = ((tmp_diff_img[x,y] / 3) / 2) + 127.5
+					diff_img[x,y,0] = val if tmp_diff_img[x,y] < 0 else 0
+					diff_img[x,y,1] = val if tmp_diff_img[x,y] > 0 else 0
+					diff_img[x,y,2] = val if tmp_diff_img[x,y] == 0 else 0
+			
+			diff_img = diff_img.astype(dtype = t)
+
+			print(diff_img.shape)
+			print(diff_img)
+
+			pil_img = Image.fromarray(diff_img)
+			diff_file_path = output_dir + '\\' + filename.replace('.'+extension, '') + '_DIFF.png'
+			pil_img.save(diff_file_path)
+			print(diff_file_path)
+
+
+			if interactive:
+				# histogramme
+				splt[2].hist(diff_img[:,:,0].flatten(), bins=color_channel_values, color='r')
+				splt[2].hist(diff_img[:,:,1].flatten(), bins=color_channel_values, color='g')
+				splt[2].hist(diff_img[:,:,2].flatten(), bins=color_channel_values, color='b')
+
+				# image finale
+				splt[3].imshow(diff_img)
+
+		if generate_differential_img:
+			previous_img = image_data
+			previous_filename = filename
+
+		plt.show(block = True)
