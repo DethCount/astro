@@ -38,7 +38,9 @@ for filename in os.listdir(input_dir):
 		image_data = image_data.transpose((1,2,0))
 		image_data = np.flip(image_data, axis=0)
 		t = image_data.dtype
-		fig,splt = plt.subplots(4 if generate_differential_img else 2)
+
+		if interactive:
+			fig,splt = plt.subplots(4 if generate_differential_img else 2)
 
 		min_color = min_color if min_color_calculated and min_color_stable else min_color_init
 
@@ -64,7 +66,7 @@ for filename in os.listdir(input_dir):
 			image_data = image_data[xmin:xmax,ymin:ymax,:]
 			image_rgb = image_rgb[xmin0:xmax0,ymin0:ymax0]
 			mean = image_rgb.mean()
-			print('min_color: ' + str(min_color) + ' => mean: ' + str(mean))
+			# print('min_color: ' + str(min_color) + ' => mean: ' + str(mean))
 			min_color = min_color + min_color_step
 			if (min_color_stable and min_color_calculated) or mean >= min_avg_color :
 				break
@@ -104,24 +106,28 @@ for filename in os.listdir(input_dir):
 		print(file_path)
 
 		if generate_differential_img and previous_img is not None:
+			#normalize shape with previous image
 			xmaxshape = max(image_data.shape[0], previous_img.shape[0])
 			ymaxshape = max(image_data.shape[1], previous_img.shape[1])
 			maxshape = (xmaxshape,ymaxshape,3)
-			print(maxshape)
+
 			image_data_tmp = np.zeros(shape = maxshape)
-			image_data[:image_data.shape[0],:image_data.shape[1],:] = image_data
+			image_data_tmp[:image_data.shape[0],:image_data.shape[1],:] = image_data
+
 			previous_img_tmp = np.zeros(shape = maxshape)
 			previous_img_tmp[:previous_img.shape[0],:previous_img.shape[1],:] = previous_img
 			previous_img = previous_img_tmp
 			del previous_img_tmp
 
+			# diff with previous image
 			diff_img = image_data_tmp - previous_img
+
 			tmp_diff_img = np.sum(diff_img, axis=2)
 			diff_img = np.zeros(shape = maxshape)
 
-			print(maxshape)
-			print(diff_img.shape)
-
+			# red = pixel value decreasing
+			# green = pixel value increasing
+			# blue = stable pixel
 			for x in range(xmaxshape):
 				for y in range(ymaxshape):
 					val = ((tmp_diff_img[x,y] / 3) / 2) + 127.5
@@ -131,14 +137,11 @@ for filename in os.listdir(input_dir):
 			
 			diff_img = diff_img.astype(dtype = t)
 
-			print(diff_img.shape)
-			print(diff_img)
-
+			# writing diff image
 			pil_img = Image.fromarray(diff_img)
-			diff_file_path = output_dir + '\\' + filename.replace('.'+extension, '') + '_DIFF.png'
+			diff_file_path = output_dir + '\\' + previous_filename.replace('.'+extension, '') + '_TO_' + filename.replace('.'+extension, '') + '.png'
 			pil_img.save(diff_file_path)
 			print(diff_file_path)
-
 
 			if interactive:
 				# histogramme
@@ -153,4 +156,5 @@ for filename in os.listdir(input_dir):
 			previous_img = image_data
 			previous_filename = filename
 
-		plt.show(block = True)
+		if interactive:
+			plt.show(block = True)
