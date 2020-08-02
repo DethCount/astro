@@ -1,15 +1,16 @@
 # pip install matplotlib astropy
 # python planetary_crop.py
 
-import os
+import os, time, random
+import numpy as np
+
+from PIL import Image
+
 import matplotlib.pyplot as plt
 from astropy.visualization import astropy_mpl_style
 plt.style.use(astropy_mpl_style)
 
-
-import numpy as np
-from PIL import Image
-
+#configuration
 input_dir = 'in' # put fits here
 output_dir = 'out' # get generated images here 
 interactive = False # show interface
@@ -20,11 +21,20 @@ min_color_init = 10
 min_color_step = 5
 padding = 10 # padding arround target
 generate_differential_img = True
+stack = True
+stack_filename = 'stacked.' + str(time.time()) + '.png'
 
+# internal vars
 min_color_calculated = False 
 color_channel_values = range(255);
 previous_img = None
 previous_filename = None
+previous_extension = None
+stack_shape = None
+nb_stacked_images = 0
+stack_img = None
+stack_file_path = output_dir + '\\' + stack_filename
+t = 'uint8'
 
 for filename in os.listdir(input_dir):
 	image_data = None
@@ -46,7 +56,11 @@ for filename in os.listdir(input_dir):
 
 	if image_data is not None:
 		if interactive:
-			fig,splt = plt.subplots(4 if generate_differential_img else 2)
+			nb_plots = 2
+			if generate_differential_img:
+				nb_plots += 2
+
+			_,splt = plt.subplots(nb_plots)
 
 		min_color = min_color if min_color_calculated and min_color_stable else min_color_init
 
@@ -127,6 +141,7 @@ for filename in os.listdir(input_dir):
 
 			# diff with previous image
 			diff_img = image_data_tmp - previous_img
+			del image_data_tmp
 
 			tmp_diff_img = np.sum(diff_img, axis=2)
 			diff_img = np.zeros(shape = maxshape)
@@ -145,7 +160,7 @@ for filename in os.listdir(input_dir):
 
 			# writing diff image
 			pil_img = Image.fromarray(diff_img)
-			diff_file_path = output_dir + '\\' + previous_filename.replace(extension, '') + '_TO_' + filename.replace(extension, '.png')
+			diff_file_path = output_dir + '\\' + previous_filename.replace(previous_extension, '') + '_TO_' + filename.replace(extension, '.png')
 			pil_img.save(diff_file_path)
 			print(diff_file_path)
 
@@ -158,9 +173,46 @@ for filename in os.listdir(input_dir):
 				# image finale
 				splt[3].imshow(diff_img)
 
-		if generate_differential_img:
+		if generate_differential_img or stack:
 			previous_img = image_data
 			previous_filename = filename
+			previous_extension = extension
+
+		if stack:
+			if stack_shape is None:
+				stack_shape = image_data.shape
+			else:
+				stack_shape_x = max(image_data.shape[0], stack_shape[0])
+				stack_shape_y = max(image_data.shape[1], stack_shape[1])
+				stack_shape = (stack_shape_x,stack_shape_y,3)
+
+			stack_img_tmp = np.zeros(shape = stack_shape)
+			if stack_img is not None:
+				stack_img_tmp[:stack_img.shape[0],:stack_img.shape[1],:] = stack_img
+			stack_img = stack_img_tmp
+			del stack_img_tmp
+
+			image_data_tmp = np.zeros(shape = stack_shape)
+			image_data_tmp[:image_data.shape[0],:image_data.shape[1],:] = image_data
+			stack_img += image_data_tmp
+			del image_data_tmp
+
+			nb_stacked_images += 1
 
 		if interactive:
 			plt.show(block = True)
+
+if stack:
+	stack_img /= nb_stacked_images
+	stack_img = stack_img.round().astype(dtype = t)
+
+	# writing stacked image
+	pil_img = Image.fromarray(stack_img)
+	pil_img.save(stack_file_path)
+	print(stack_file_path)
+
+	if interactive:
+		# stacked image
+		plt.imshow(stack_img)
+		plt.show(block = True)
+
